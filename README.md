@@ -122,6 +122,25 @@ curl localhost:8090/v1/resources/$RESOURCE_ID
 curl -X PUT localhost:8090/v1/resources/$RESOURCE_ID -H "Content-Type: application/json" --data-binary @examples/deployment.v2.json
 ```
 
+### Manifest
+
+1. You can send a CloudEvents-formatted request with JSON payload to the RESTful endpoint to create the specified resource in the event message.
+
+```shell
+# replace with the uuid of the target consumer
+CONSUMER_ID="fa1ec9cc-d506-48c3-9521-4d8b3a2aff5e"
+sed -i "s/CLUSTERNAME/$CONSUMER_ID/g" examples/cloudevents.json
+curl -X POST localhost:8090/v1/cloudevents -H "Content-Type: application/x-cloudevents" --data-binary @examples/cloudevents.json
+```
+
+2. You can create a gRPC client to send a CloudEvents-formatted request with proto payload to the gRPC endpoint, creating the specified resource in the event message, for example:
+
+```shell
+CONSUMER_ID="fa1ec9cc-d506-48c3-9521-4d8b3a2aff5e"
+sed -i "s/CLUSTERNAME/$CONSUMER_ID/g" examples/cloudevents.json
+go run ./examples/grpc_client.go -f ./examples/cloudevents.json
+```
+
 ### Integrating with ConcertMaster
 
 ```shell

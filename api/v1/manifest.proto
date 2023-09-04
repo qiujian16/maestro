@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "cloudevents/protobuf/cloudevent.proto";
+
+option go_package = "github.com/kube-orchestra/maestro/api/v1";
+
+message CloudEventSendResponse {
+  enum Status {
+    OK = 0;
+    ERROR = 1;
+  }
+  Status status = 1;
+  string message = 2;
+}
+
+service CloudEventsService {
+  rpc Send(cloudevents.protobuf.CloudEvent) returns (CloudEventSendResponse) {
+    option (google.api.http) = {
+      post: "/v1/cloudevents"
+      body: "*"
+    };
+  }
+}
