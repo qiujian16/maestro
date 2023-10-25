@@ -20,7 +20,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	CloudEventsService_Send_FullMethodName = "/v1.CloudEventsService/Send"
+	CloudEventsService_Send_FullMethodName  = "/v1.CloudEventsService/Send"
+	CloudEventsService_Watch_FullMethodName = "/v1.CloudEventsService/Watch"
 )
 
 // CloudEventsServiceClient is the client API for CloudEventsService service.
@@ -28,6 +29,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CloudEventsServiceClient interface {
 	Send(ctx context.Context, in *pb.CloudEvent, opts ...grpc.CallOption) (*CloudEventSendResponse, error)
+	Watch(ctx context.Context, in *ResourceWatchRequest, opts ...grpc.CallOption) (CloudEventsService_WatchClient, error)
 }
 
 type cloudEventsServiceClient struct {
@@ -47,11 +49,44 @@ func (c *cloudEventsServiceClient) Send(ctx context.Context, in *pb.CloudEvent, 
 	return out, nil
 }
 
+func (c *cloudEventsServiceClient) Watch(ctx context.Context, in *ResourceWatchRequest, opts ...grpc.CallOption) (CloudEventsService_WatchClient, error) {
+	stream, err := c.cc.NewStream(ctx, &CloudEventsService_ServiceDesc.Streams[0], CloudEventsService_Watch_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &cloudEventsServiceWatchClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type CloudEventsService_WatchClient interface {
+	Recv() (*pb.CloudEvent, error)
+	grpc.ClientStream
+}
+
+type cloudEventsServiceWatchClient struct {
+	grpc.ClientStream
+}
+
+func (x *cloudEventsServiceWatchClient) Recv() (*pb.CloudEvent, error) {
+	m := new(pb.CloudEvent)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // CloudEventsServiceServer is the server API for CloudEventsService service.
 // All implementations must embed UnimplementedCloudEventsServiceServer
 // for forward compatibility
 type CloudEventsServiceServer interface {
 	Send(context.Context, *pb.CloudEvent) (*CloudEventSendResponse, error)
+	Watch(*ResourceWatchRequest, CloudEventsService_WatchServer) error
 	mustEmbedUnimplementedCloudEventsServiceServer()
 }
 
@@ -61,6 +96,9 @@ type UnimplementedCloudEventsServiceServer struct {
 
 func (UnimplementedCloudEventsServiceServer) Send(context.Context, *pb.CloudEvent) (*CloudEventSendResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
+}
+func (UnimplementedCloudEventsServiceServer) Watch(*ResourceWatchRequest, CloudEventsService_WatchServer) error {
+	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
 }
 func (UnimplementedCloudEventsServiceServer) mustEmbedUnimplementedCloudEventsServiceServer() {}
 
@@ -93,6 +131,27 @@ func _CloudEventsService_Send_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CloudEventsService_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ResourceWatchRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(CloudEventsServiceServer).Watch(m, &cloudEventsServiceWatchServer{stream})
+}
+
+type CloudEventsService_WatchServer interface {
+	Send(*pb.CloudEvent) error
+	grpc.ServerStream
+}
+
+type cloudEventsServiceWatchServer struct {
+	grpc.ServerStream
+}
+
+func (x *cloudEventsServiceWatchServer) Send(m *pb.CloudEvent) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // CloudEventsService_ServiceDesc is the grpc.ServiceDesc for CloudEventsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -105,6 +164,12 @@ var CloudEventsService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CloudEventsService_Send_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Watch",
+			Handler:       _CloudEventsService_Watch_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "api/v1/manifest.proto",
 }

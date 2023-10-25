@@ -49,7 +49,7 @@ func main() {
 	v1.RegisterResourceServiceServer(s, resourcesAPI)
 
 	// Attach the cloud events service to the server
-	var cloudEventsAPI = manifestsv1.NewCloudEventsService(ceConnection.ResourceChannel)
+	var cloudEventsAPI = manifestsv1.NewCloudEventsService(ceConnection.ResourceChannel, ceConnection.ResourceStatusChannel)
 	v1.RegisterCloudEventsServiceServer(s, cloudEventsAPI)
 
 	// Serve gRPC server

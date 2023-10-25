@@ -17,11 +17,21 @@ message CloudEventSendResponse {
   string message = 2;
 }
 
+message ResourceWatchRequest {
+  string id = 1;
+}
+
 service CloudEventsService {
   rpc Send(cloudevents.protobuf.CloudEvent) returns (CloudEventSendResponse) {
     option (google.api.http) = {
       post: "/v1/cloudevents"
       body: "*"
+    };
+  }
+
+  rpc Watch(ResourceWatchRequest) returns (stream cloudevents.protobuf.CloudEvent) {
+    option (google.api.http) = {
+      get: "/v1/resources/{id}/status"
     };
   }
 }

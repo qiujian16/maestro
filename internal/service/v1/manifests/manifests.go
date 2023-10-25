@@ -9,20 +9,29 @@ import (
 	cepbv2 "github.com/cloudevents/sdk-go/binding/format/protobuf/v2"
 	cepb "github.com/cloudevents/sdk-go/binding/format/protobuf/v2/pb"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/kube-orchestra/maestro/internal/db"
 	v1 "github.com/kube-orchestra/maestro/proto/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	cetypes "open-cluster-management.io/api/cloudevents/generic/types"
+	agentcodec "open-cluster-management.io/api/cloudevents/work/agent/codec"
 	workpayload "open-cluster-management.io/api/cloudevents/work/payload"
+	workv1 "open-cluster-management.io/api/work/v1"
 )
 
 type CloudEventsService struct {
 	v1.UnimplementedCloudEventsServiceServer
-	resourceChan chan<- db.Resource
+	resourceChan       chan<- db.Resource
+	resourceStatusChan <-chan db.Resource
 }
 
-func NewCloudEventsService(resourceChan chan<- db.Resource) *CloudEventsService {
-	return &CloudEventsService{resourceChan: resourceChan}
+func NewCloudEventsService(resourceChan chan<- db.Resource, resourceStatusChan <-chan db.Resource) *CloudEventsService {
+	return &CloudEventsService{
+		resourceChan:       resourceChan,
+		resourceStatusChan: resourceStatusChan,
+	}
 }
 
 func (svc *CloudEventsService) Send(_ context.Context, r *cepb.CloudEvent) (*v1.CloudEventSendResponse, error) {
@@ -97,4 +106,54 @@ func (svc *CloudEventsService) Send(_ context.Context, r *cepb.CloudEvent) (*v1.
 		Message: "Manifest posted successfully.",
 		Status:  v1.CloudEventSendResponse_OK,
 	}, nil
+}
+
+func (svc *CloudEventsService) Watch(r *v1.ResourceWatchRequest, srv v1.CloudEventsService_WatchServer) error {
+	for msg := range svc.resourceStatusChan {
+		codec := agentcodec.NewManifestCodec(nil)
+		eventType := cetypes.CloudEventsType{
+			CloudEventsDataType: codec.EventDataType(),
+			SubResource:         cetypes.SubResourceStatus,
+			Action:              cetypes.EventAction("update_request"),
+		}
+
+		work := &workv1.ManifestWork{
+			ObjectMeta: metav1.ObjectMeta{
+				ResourceVersion: strconv.FormatInt(msg.ResourceGenerationID, 10),
+				Annotations: map[string]string{
+					"cloudevents.open-cluster-management.io/originalsource": "maestro",
+				},
+			},
+			Spec: workv1.ManifestWorkSpec{
+				Workload: workv1.ManifestsTemplate{
+					Manifests: []workv1.Manifest{
+						{
+							RawExtension: runtime.RawExtension{
+								Object: &msg.Object,
+							},
+						},
+					},
+				},
+			},
+			Status: workv1.ManifestWorkStatus{
+				Conditions:     msg.Status.ReconcileStatus.Conditions,
+				ResourceStatus: workv1.ManifestResourceStatus{},
+			},
+		}
+
+		evt, err := codec.Encode(msg.ConsumerId, eventType, work)
+		if err != nil {
+			return fmt.Errorf("failed to encode resource to cloud event: %v", err)
+		}
+
+		pbEvt, err := cepbv2.ToProto(evt)
+		if err != nil {
+			return fmt.Errorf("failed to convert cloudevent to protobuf: %v", err)
+		}
+		if err := srv.Send(pbEvt); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
