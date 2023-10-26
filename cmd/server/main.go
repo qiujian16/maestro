@@ -8,7 +8,9 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/kube-orchestra/maestro/internal/cloudevents"
+	"github.com/kube-orchestra/maestro/internal/marshaler"
 	consumerv1 "github.com/kube-orchestra/maestro/internal/service/v1/consumers"
+	manifestsv1 "github.com/kube-orchestra/maestro/internal/service/v1/manifests"
 	resourcesv1 "github.com/kube-orchestra/maestro/internal/service/v1/resources"
 	v1 "github.com/kube-orchestra/maestro/proto/api/v1"
 	"google.golang.org/grpc"
@@ -46,6 +48,10 @@ func main() {
 	var resourcesAPI = resourcesv1.NewResourceService(ceConnection.ResourceChannel)
 	v1.RegisterResourceServiceServer(s, resourcesAPI)
 
+	// Attach the cloud events service to the server
+	var cloudEventsAPI = manifestsv1.NewCloudEventsService(ceConnection.ResourceChannel, ceConnection.ResourceStatusChannel)
+	v1.RegisterCloudEventsServiceServer(s, cloudEventsAPI)
+
 	// Serve gRPC server
 	log.Println("Serving gRPC on", listenAddress)
 	go func() {
@@ -64,7 +70,8 @@ func main() {
 		log.Fatalln("Failed to dial server:", err)
 	}
 
-	gwmux := runtime.NewServeMux()
+	ceMarshaler := &marshaler.CloudEventJSON{}
+	gwmux := runtime.NewServeMux(runtime.WithMarshalerOption("application/x-cloudevents", ceMarshaler))
 
 	// Register Greeter
 	err = v1.RegisterConsumerServiceHandler(context.Background(), gwmux, conn)
@@ -75,6 +82,11 @@ func main() {
 	err = v1.RegisterResourceServiceHandler(context.Background(), gwmux, conn)
 	if err != nil {
 		log.Fatalln("Failed to register resource service handler:", err)
+	}
+
+	err = v1.RegisterCloudEventsServiceHandler(context.Background(), gwmux, conn)
+	if err != nil {
+		log.Fatalln("Failed to register cloud events service handler:", err)
 	}
 
 	mux := http.NewServeMux()
@@ -88,6 +100,11 @@ func main() {
 	// mount a path to expose the generated OpenAPI specification on disk
 	mux.HandleFunc("/swagger-ui/resource.swagger.json", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./swagger/api/v1/resource.swagger.json")
+	})
+
+	// mount a path to expose the generated OpenAPI specification on disk
+	mux.HandleFunc("/swagger-ui/manifest.swagger.json", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./swagger/api/v1/manifest.swagger.json")
 	})
 
 	// mount the Swagger UI that uses the OpenAPI specification path above

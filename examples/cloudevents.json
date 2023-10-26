@@ -1,0 +1,45 @@
+{
+    "id": "123456789",
+    "specversion": "1.0",
+    "time": "2023-08-30T17:31:00Z",
+    "datacontenttype": "application/json",
+    "source": "testing",
+    "type": "io.open-cluster-management.works.v1alpha1.manifests.spec.create_request",
+    "clustername": "CLUSTERNAME",
+    "resourceid": "748d04ad-887a-44dd-b788-da1373227072",
+    "resourceversion": "1",
+    "data": {
+        "manifest": {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+              "name": "nginx",
+              "namespace": "default"
+            },
+            "spec": {
+              "replicas": 1,
+              "selector": {
+                "matchLabels": {
+                  "app": "nginx"
+                }
+              },
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "app": "nginx"
+                  }
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "image": "nginxinc/nginx-unprivileged",
+                      "imagePullPolicy": "IfNotPresent",
+                      "name": "nginx"
+                    }
+                  ]
+                }
+              }
+            }
+        }
+    }
+}

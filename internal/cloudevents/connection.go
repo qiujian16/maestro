@@ -22,6 +22,7 @@ const (
 type Connection struct {
 	cloudEventsSourceClient *cegeneric.CloudEventSourceClient[*db.Resource]
 	ResourceChannel         chan db.Resource
+	ResourceStatusChannel   chan db.Resource
 }
 
 func NewConnection(ctx context.Context) *Connection {
@@ -46,6 +47,7 @@ func NewConnection(ctx context.Context) *Connection {
 	return &Connection{
 		cloudEventsSourceClient: ceSourceClient,
 		ResourceChannel:         make(chan db.Resource),
+		ResourceStatusChannel:   make(chan db.Resource),
 	}
 }
 
@@ -71,6 +73,7 @@ func (c *Connection) StartStatusReceiver(ctx context.Context) {
 	go func() {
 		if err := c.cloudEventsSourceClient.Subscribe(ctx, func(action cetypes.ResourceAction, resource *db.Resource) error {
 			klog.Infof("setting status %s to db %v", resource.Id, resource.Status.ContentStatus)
+			c.ResourceStatusChannel <- *resource
 			return db.SetStatusResource(resource.Id, &resource.Status)
 		}); err != nil {
 			//TODO retry to connect the broker and send resync request
